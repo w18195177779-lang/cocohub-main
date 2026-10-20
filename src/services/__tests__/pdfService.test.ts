@@ -11,6 +11,8 @@ import {
   shareCertificate,
   generateVetHealthReport,
   shareHealthReport,
+  generateClaimSummaryPdf,
+  shareClaimSummary,
   type PetCertificateInfo,
   type VetHealthReportData,
 } from '../../services/pdfService';
@@ -207,6 +209,39 @@ describe('pdfService — Vaccination Certificate PDF Generator (Issue #417)', ()
       await shareHealthReport('/mock/vet-report.pdf');
       expect(mockShare).toHaveBeenCalledWith(
         '/mock/vet-report.pdf',
+        expect.objectContaining({ mimeType: 'application/pdf' }),
+      );
+    });
+  describe('generateClaimSummaryPdf (#42)', () => {
+    it('generates a formatted claim summary document and shares via native sheet', async () => {
+      const claimData = {
+        claimId: 'claim-xyz-101',
+        policyNumber: 'HP-998877',
+        provider: 'Trupanion',
+        petName: 'Bella',
+        amount: 850.5,
+        description: 'Cruciate ligament surgery',
+        status: 'under_review',
+        submittedAt: '2026-10-18T12:00:00Z',
+        attachmentUrls: ['https://s3.example.com/invoice.pdf'],
+      };
+
+      const rep = await generateClaimSummaryPdf(claimData);
+      expect(rep.filePath).toContain('insurance-claim-claim-xyz-101');
+      expect(rep.hash).toBeDefined();
+
+      const mockWrite = (await import('expo-file-system')).writeAsStringAsync as jest.Mock;
+      const content: string = mockWrite.mock.calls[mockWrite.mock.calls.length - 1][1];
+      expect(content).toContain('COCOHUB PET INSURANCE CLAIM SUMMARY');
+      expect(content).toContain('Claim ID:     claim-xyz-101');
+      expect(content).toContain('Trupanion');
+      expect(content).toContain('$850.50 USD');
+      expect(content).toContain('Cruciate ligament surgery');
+
+      await shareClaimSummary('/mock/claim.pdf');
+      const mockSharing = (await import('expo-sharing')).shareAsync as jest.Mock;
+      expect(mockSharing).toHaveBeenCalledWith(
+        '/mock/claim.pdf',
         expect.objectContaining({ mimeType: 'application/pdf' }),
       );
     });
